@@ -11,7 +11,6 @@ def connection():
         soc = socket.create_server((HOST, PORT), reuse_port=True, backlog=1)
         while True:
             conn, addr = soc.accept()
-            conn.send("Connected to the server\r\n".encode('utf-8'))
             print("Connected to", addr)
             client_thread = threading.Thread(target=handle_client, args=(conn,))
             client_thread.daemon = True
@@ -23,20 +22,41 @@ def connection():
 
 def handle_client(conn):
     with conn:
+        conn.send(b'+OK\r\n')
         while True:
-            data = conn.recv(1024).decode('utf-8').strip()
-            if not data:
-                continue
-            if data.upper() == "PING":
-                conn.send("PONG\r\n".encode('utf-8'))
-            if data.upper() == "EXIT":
-                break
-            else:
-                continue
+            try:
+                data = conn.recv(1024)
+                if not data:
+                    break
+                lines = data.split(b'\r\n')
 
-
-def echo():
-    pass
+                if lines[0].startswith(b'*'):
+                    # This is an array. First element is the command followed by arguments.
+                    no_of_elems = int(lines[0][1:])
+                    elems = []
+                    index = 1
+                    for _ in range(no_of_elems):
+                        if lines[index].startswith(b'$'):
+                            elems.append(lines[index + 1])
+                            index += 2
+                        else:
+                            return ValueError("Something went wrong")
+                    if elems[0].decode('ascii').lower() == 'ping':
+                        conn.send(b'+PONG\r\n')
+                    elif elems[0].decode('ascii').lower() == 'echo':
+                        if len(elems) == 2:
+                            echo_message = elems[1].decode('ascii')
+                            conn.send(f'+"{echo_message}"\r\n'.encode('ascii'))
+                        else:
+                            conn.send(b'-ERR wrong number of arguments for echo command\r\n')
+                    else:
+                        continue
+                else:
+                    continue
+            except ValueError:
+                conn.send(b'-ERR invalid request\r\n')
+            except ConnectionResetError:
+                print("Connection reset by peer")
 
 
 if __name__ == "__main__":
