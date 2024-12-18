@@ -4,6 +4,9 @@ import threading
 HOST = '127.0.0.1'
 PORT = 6379
 
+# In-memory data store for key-value pairs
+data_store = {}
+
 
 def connection():
 
@@ -46,9 +49,27 @@ def handle_client(conn):
                     elif elems[0].decode('ascii').lower() == 'echo':
                         if len(elems) == 2:
                             echo_message = elems[1].decode('ascii')
-                            conn.send(f'+"{echo_message}"\r\n'.encode('ascii'))
+                            conn.send(f'+{echo_message}\r\n'.encode('ascii'))
                         else:
                             conn.send(b'-ERR wrong number of arguments for echo command\r\n')
+                    elif elems[0].decode('ascii').lower() == 'set':
+                        if len(elems) == 3:
+                            key = elems[1].decode('ascii')
+                            value = elems[2].decode('ascii')
+                            data_store[key] = value
+                            conn.send(b'+OK\r\n')
+                        else:
+                            conn.send(b'-ERR wrong number of arguments for set command\r\n')
+                    elif elems[0].decode('ascii').lower() == 'get':
+                        if len(elems) == 2:
+                            key = elems[1].decode('ascii')
+                            value = data_store.get(key)
+                            if value is not None:
+                                conn.send(f'+{value}\r\n'.encode('ascii'))
+                            else:
+                                conn.send(b'$-1\r\n')  # Redis nil response
+                        else:
+                            conn.send(b'-ERR wrong number of arguments for get command\r\n')
                     else:
                         continue
                 else:
@@ -65,5 +86,5 @@ if __name__ == "__main__":
 # Bind to port -- Done
 # Ping response -- Done
 # Concurrent ping response -- Done
-# Echo response -- Todo
-# SET and GET -- Todo
+# Echo response -- Done
+# SET and GET -- Done
